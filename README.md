@@ -10,8 +10,11 @@ Severe acute respiratory syndrome coronavirus (SARS-CoV), Middle East respirator
 ## Data Availability
 ### Raw datasets: 
 sars.csv: This file provides a detailed dataset on the Severe Acute Respiratory Syndrome (SARS) outbreak of 2002-2003.
+
 covid.csv: This file includes comprehensive data on the COVID-19 pandemic.
+
 MERS.csv: This file provides a detailed dataset on the Severe Acute Respiratory Syndrome (SARS) outbreak of 2013.
+
 
 ### Figures and tables:
 Fully reproducible using the scripts provided in this repository.
