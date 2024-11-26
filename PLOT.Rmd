@@ -1,0 +1,391 @@
+---
+title: "Untitled"
+output: html_document
+date: "2024-11-01"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(data.table)
+library(showtext)
+showtext_auto()
+font_add("Times New Roman","C:/Windows/Fonts/times.ttf")
+font_add("Times New Roman Bold","C:/Windows/Fonts/timesbd.ttf")
+font_add("Times New Roman ita","C:/Windows/Fonts/timesi.ttf")
+library(RColorBrewer)
+library(ggplot2)
+library(ggridges)
+
+```
+
+```{r data_clean}
+a<-fread("covid.csv") %>% 
+  filter(COUNTRY_NAME %in% c("China","India","France","Brazil","France","Germany","Japan","United States of America","Russian Federation","Indonesia","Nigeria","Mexico") & SEX=="All" & AGEGROUP=="All" & as.Date(ISO_START_DATE)<=as.Date("2023-05-05")) %>% 
+  group_by(COUNTRY_NAME) %>% 
+  arrange(as.Date(ISO_START_DATE)) %>% 
+  select(COUNTRY_NAME,ISO_YEAR,ISO_WEEK,ISO_START_DATE,DAILY_CASES) %>% 
+  mutate(DAILY_CASES=case_when(is.na(DAILY_CASES)~0,!is.na(DAILY_CASES)~DAILY_CASES))
+
+
+all_dates <- unique(a$ISO_START_DATE)
+all_countries <- unique(a$COUNTRY_NAME)
+
+a<-a %>% rename(Country=COUNTRY_NAME) %>% rename(Date=ISO_START_DATE)
+complete_df <- expand.grid(Date = all_dates, Country = all_countries)
+
+b <- complete_df %>%
+  left_join(a, by = c("Date", "Country")) %>%
+  mutate(DAILY_CASES = ifelse(is.na(DAILY_CASES), 0, DAILY_CASES)) %>% 
+  group_by(Country) %>% 
+  arrange(Date) %>% 
+  mutate(Country=ifelse(Country=="United States of America","America",Country)) %>% 
+  mutate(Country=ifelse(Country=="Russian Federation","Russian",Country)) 
+
+```
+
+```{r COVID-19 RIDGE FIGURE}
+
+
+b$Country<-as.factor(b$Country)
+
+b <- b %>%
+  group_by(Country) %>%
+  mutate(
+    DAILY_CASES_MINMAX = (DAILY_CASES - min(DAILY_CASES, na.rm = TRUE)) / 
+                          (max(DAILY_CASES, na.rm = TRUE) - min(DAILY_CASES, na.rm = TRUE))
+  ) %>%
+  ungroup() %>% 
+  mutate(Date=as.Date(Date))
+
+figure1<-ggplot(b, aes(x = Date, y = Country, height = DAILY_CASES_MINMAX,fill=Country)) +
+  geom_density_ridges2(stat = "identity",scale=3,alpha=1,linewidth=0.3,show.legend = FALSE)+
+  scale_fill_viridis_d()+ 
+  theme_ridges(grid = FALSE)+ 
+  theme(
+    axis.text.x = element_text(family = "Times New Roman Bold",size = 6),  
+    axis.text.y = element_text(family = "Times New Roman Bold",size = 6),
+    axis.ticks.y=element_blank(),
+    axis.ticks.x=element_blank(),
+    axis.title.y = element_text(family = "Times New Roman Bold",size = 8),
+    axis.title.x = element_text(family = "Times New Roman Bold",size = 8),
+    axis.line = element_line(colour = "white"))
+```
+
+
+```{r SARS RIDGE FIGURE}
+
+a<-fread("SARS.csv") %>% 
+    filter(Country %in% c("China","Canada","Singapore","Hong Kong, China","Taiwan, China","United States")) %>% 
+  group_by(Country) %>% 
+  mutate(new=Cumulative-lag(Cumulative)) %>% 
+  arrange(Country) %>% 
+  mutate(new=ifelse(new<0|is.na(new),0,new)) %>% 
+  mutate(Date=as.Date(Date)) %>% 
+  group_by(Country) %>% 
+  mutate(
+  news= (new - min(new, na.rm = TRUE)) / 
+                          (max(new, na.rm = TRUE) - min(new, na.rm = TRUE))
+  ) %>%
+  ungroup() %>% 
+  select(Date,Country,news)
+
+figure2<-ggplot(a, aes(x = Date, y = Country, height = news,fill=Country)) +
+  geom_density_ridges2(stat = "identity",scale=2,alpha=1,linewidth=0.3,show.legend = FALSE)+
+  scale_fill_viridis_d()+ 
+  theme_ridges(grid = FALSE)+ 
+  scale_x_date(date_labels = "%Y/%m")+
+  theme(
+    axis.text.x = element_text(family = "Times New Roman Bold",size = 6),  
+    axis.text.y = element_text(family = "Times New Roman Bold",size = 6),
+    axis.ticks.y=element_blank(),
+    axis.ticks.x=element_blank(),
+    axis.title.y = element_text(family = "Times New Roman Bold",size = 8),
+    axis.title.x = element_text(family = "Times New Roman Bold",size = 8),
+    axis.line = element_line(colour = "white"))
+```
+
+```{r MERS RIDGE FIGURE}
+library(ISOweek)
+
+a<-fread("Mers.csv")  
+  a$Date=ISOweek2date(paste(a$Year,sprintf("W%02d", a$Week), 1, sep = "-"))
+  a<-a %>% group_by(Region) %>%  mutate(
+  new= (`New Cases` - min(`New Cases`, na.rm = TRUE)) / 
+                          (max(`New Cases`, na.rm = TRUE) - min(`New Cases`, na.rm = TRUE))
+  ) %>%
+  ungroup()
+  
+figure3<-ggplot(a, aes(x = Date, y = Region, height = new,fill=Region)) +
+  geom_density_ridges2(stat = "identity",scale=1.5,alpha=1,linewidth=0.2,show.legend = FALSE)+
+  scale_fill_viridis_d()+ 
+  theme_ridges(grid = FALSE)+ 
+#  scale_x_date(date_labels = "%Y/%m")+
+  theme(
+    axis.text.x = element_text(family = "Times New Roman Bold",size = 6),  
+    axis.text.y = element_text(family = "Times New Roman Bold",size = 6),
+    axis.ticks.y=element_blank(),
+    axis.ticks.x=element_blank(),
+    axis.title.y = element_text(family = "Times New Roman Bold",size = 8),
+    axis.title.x = element_text(family = "Times New Roman Bold",size = 8),
+    axis.line = element_line(colour = "white"))
+
+library(patchwork)
+
+ figure2/figure3/figure1+ plot_layout(ncol=1)+
+  plot_annotation(tag_levels = list(c("A: Temporal distribution of the cumulative SARS incidence, 2002-2003","B: Temporal distribution of the cumulative MERS incidence, 2012-2019","C: Temporal distribution of the cumulative COVID-19 incidence, 2019-2024"))) & theme(plot.tag=element_text(size = 11,family="Times New Roman Bold",hjust = 0),
+      plot.tag.position = c(0, 1.04),
+      plot.tag.location = "plot")
+
+```
+
+```{r Variants}
+
+lines <- readLines("Variants.tsv")
+
+sections_list <- list()
+current_section <- NULL
+current_data <- list()
+
+
+for (line in lines) {
+  if (startsWith(line, "##")) {
+    if (!is.null(current_section) && length(current_data) > 0) {
+      sections_list[[current_section]] <- fread(text = paste(current_data, collapse = "\n"), header = TRUE)
+      current_data <- list()
+    }
+    current_section <- sub("^##\\s*", "", line)
+  } else if (!is.null(current_section)) {
+    current_data <- c(current_data, line)
+  }
+}
+
+if (!is.null(current_section) && length(current_data) > 0) {
+  sections_list[[current_section]] <- fread(text = paste(current_data, collapse = "\n"), header = TRUE)
+}
+
+
+print(names(sections_list))
+
+for (section_name in names(sections_list)) {
+  clean_name <- gsub("[^a-zA-Z0-9]", "_", section_name)
+  fwrite(sections_list[[section_name]], paste0("Variants/", clean_name, ".csv"))
+}
+
+delta_files <- list.files(path ="Variants/", pattern = "Delta", full.names = TRUE, ignore.case = TRUE)
+
+
+delta <- do.call(rbind, lapply(delta_files, function(file) {
+  temp_df <- fread(file)  
+  temp_df$Filename <- basename(file)  
+  return(temp_df)
+}))
+
+omicron<-fread("Variants/Omicron.csv") %>% rename(omicron=num_seqs)
+alpha<-fread("Variants/20I__Alpha__V1_.csv")%>% rename(alpha=num_seqs)
+beta<-fread("Variants/20H__Beta__V2_.csv")%>% rename(beta=num_seqs)
+gamma<-fread("Variants/20J__Gamma__V3_.csv")%>% rename(gamma=num_seqs)
+
+all_files <- list.files(path = "Variants/", full.names = TRUE, ignore.case = TRUE)
+
+
+files_to_read <- all_files[!grepl("Delta|Omicron|Alpha|Beta|Gamma", all_files, ignore.case = TRUE)]
+
+
+
+others <- do.call(rbind, lapply(files_to_read, function(file) {
+  temp_df <- fread(file)  
+  temp_df$Filename <- basename(file)  
+  return(temp_df)
+}))
+
+delta<-delta %>% group_by(V1) %>% mutate(delta=sum(num_seqs)) %>% ungroup() %>% group_by(V1) %>% filter(first_seq==min(as.Date(first_seq))) 
+#others<-others %>% group_by(V1) %>% mutate(others=sum(num_seqs)) %>% ungroup() %>% group_by(V1) %>% filter(first_seq==min(as.Date(first_seq))) %>% distinct(V1,.keep_all = TRUE)
+
+#将结果合并在一张大表里
+result<-gamma %>% select(V1,gamma) %>% left_join(alpha %>% select(V1,alpha),by=join_by(V1)) %>% 
+        left_join(beta %>% select(V1,beta),by=join_by(V1)) %>% 
+        left_join(delta %>% select(V1,delta),by=join_by(V1)) %>% 
+  left_join(omicron %>% select(V1,omicron),by=join_by(V1)) #%>% 
+  #left_join(others %>% select(V1,others,first_seq),by=join_by(V1))
+fwrite(result,file="data.csv")
+```
+
+```{r COVID-19}
+
+a<-fread("covid.csv") %>% 
+  filter(!is.na(location)) %>% group_by(location) %>% 
+  filter(as.Date(date)==max(as.Date(date))) %>% 
+  select(location,date,total_cases) %>% 
+  fwrite(file="country.csv")
+
+
+
+```
+
+```{r Load shp}
+library(sf)
+library(ggplot2)
+library(scatterpie)
+library(ggspatial)
+library(grid)
+library(RColorBrewer)
+
+shapefile_data <- st_read("Plot/Export_Output.shp")
+centroids <- st_centroid(shapefile_data)
+
+
+shapefile_data$case_bins <- cut(
+  shapefile_data$total_case,
+  breaks = c(0, 1000, 100000, 1000000, 10000000, 100000000, Inf),
+  labels = c("<1K", "1K-100K", "100K-1M", "1M-10M", "10M-100M", ">100M"),
+  include.lowest = TRUE
+)
+
+
+p<-data.frame(
+  lon = st_coordinates(centroids)[,1],
+  lat = st_coordinates(centroids)[,2],
+  Alpha=as.data.frame(shapefile_data)$alpha,
+  Beta=as.data.frame(shapefile_data)$beta,
+  Gamma=as.data.frame(shapefile_data)$gamma,
+  Delta=as.data.frame(shapefile_data)$delta,
+  Omicron=as.data.frame(shapefile_data)$omicron) 
+
+options(repr.plot.width = 12, repr.plot.height = 6)
+figure1<-ggplot(data = shapefile_data) +
+geom_sf(aes(fill = case_bins)) +
+  scale_fill_manual(
+    values = c("#f9f8ca", "#96d2b0", "#35b9c5", "#2681b6", "#1e469b", "#000080"),
+    name = "Cases",
+    guide = guide_legend(nrow = 6,
+                          keywidth = 0.4, keyheight = 0.4,  
+      title.theme = element_text(size = 7,family="Times New Roman Bold"),  
+      label.theme = element_text(size = 6.5,family="Times New Roman"),  
+      override.aes = list(color = NA) )) +  
+  theme_classic() +
+  theme(#plot.background = element_rect(fill = "aliceblue"),
+        panel.grid = element_blank(),
+        panel.background = element_rect(fill = "lightblue"),
+        panel.ontop = FALSE,
+        legend.position = c(0.07,0.43),
+        legend.background = element_rect(fill = "lightblue"))+
+  ggnewscale::new_scale_fill()+
+   geom_scatterpie2(data = p,
+                  aes(x=lon,y=lat),
+                cols = c("Alpha","Beta","Gamma","Delta","Omicron"),
+                alpha=1,
+                pie_scale = 0.5,color=NA)+
+    scale_fill_manual(values = c("Omicron" = "#f8984f",  
+                             "Delta" = "#c74647",   
+                             "Gamma" = "#f3d78a",  
+                             "Beta" = "#f2f1e6",  
+                             "Alpha" = "#982c2c"),
+                      name="Type",
+                      guide = guide_legend(
+      keywidth = 0.4, keyheight = 0.4,  
+      title.theme = element_text(size = 7,family ="Times New Roman Bold"),  
+      label.theme = element_text(size = 6.5,family="Times New Roman")  
+    ))+
+  theme(legend.position = c(0.07,0.43))+
+   annotation_north_arrow( 
+    location="tl",
+    style = north_arrow_orienteering(
+      text_size = 5,text_family = "Times New Roman Bold"
+    ),
+     height = unit(0.6, "cm"),
+  width = unit(0.48, "cm"),
+  pad_y = unit(0.000000001,"cm")
+  )+
+   annotation_custom(grob = rectGrob(gp = gpar(fill = "white", alpha = 1,col=NA)), 
+                    xmin = -200, xmax = 200, ymin = -100, ymax = -92) +
+ annotation_scale(location="bl",plot_unit="mi",width_hint=0.4,line_width=0.2,height=unit(0.08,"cm"),text_cex=0.6,text_family = "Times New Roman",pad_y = unit(0.1,"cm"),pad_x = unit(0,"cm"))
+
+  
+```
+
+```{r sars and mers}
+
+shapefile_data <- st_read("Plot/SARS.shp")
+shapefile_data$case_bins <- cut(
+  shapefile_data$cases,
+  breaks = c(-Inf,0, 10, 100, 1000,Inf),
+  labels = c("No case", "1-10", "10-100", "100-1K", ">1K"),
+  include.lowest = TRUE
+)
+
+options(repr.plot.width = 12, repr.plot.height = 6)
+figure2<-ggplot(data = shapefile_data) +
+geom_sf(aes(fill = case_bins)) +
+   scale_fill_manual(
+    values = c("lightgrey", "#ffcc00", "#ff9900", "#EB6821", "#993300"),
+    name = "Cases",
+    guide = guide_legend(nrow = 5,
+                          keywidth = 0.6, keyheight = 0.6, 
+      title.theme = element_text(size = 8,family="Times New Roman Bold"), 
+      label.theme = element_text(size = 7,family="Times New Roman"),
+      override.aes = list(color = NA))) +  
+  theme_classic() +
+  theme(#plot.background = element_rect(fill = "aliceblue"),
+        panel.grid = element_blank(),
+        panel.background = element_rect(fill = "lightblue"),
+        legend.position = c(0.06, 0.31),
+        legend.background = element_rect(fill = "lightblue"))+
+   annotation_north_arrow( 
+    location="tl",
+    style = north_arrow_orienteering(
+      text_size = 5,text_family = "Times New Roman Bold"
+    ),
+     height = unit(0.6, "cm"),
+  width = unit(0.48, "cm"),
+  pad_y = unit(0.000000001,"cm")
+  )
+  
+
+
+
+shapefile_data <- st_read("Plot/mers.shp")
+shapefile_data$case_bins <- cut(
+  shapefile_data$Confirmed,
+  breaks = c(-Inf,0, 10, 100, 1000,Inf),
+  labels = c("No case", "1-10", "10-100", "100-1K", ">1K"),
+  include.lowest = TRUE
+)
+
+options(repr.plot.width = 12, repr.plot.height = 6)
+figure3<-ggplot(data = shapefile_data) +
+geom_sf(aes(fill = case_bins)) +
+   scale_fill_manual(
+    values = c("lightgrey", "#ffccff", "#ff99ff", "#cc66ff", "#9900cc"),
+    name = "Cases",
+    guide = guide_legend(nrow = 5,
+                          keywidth = 0.6, keyheight = 0.6,  
+      title.theme = element_text(size = 8,family="Times New Roman Bold"),  
+      label.theme = element_text(size = 7,family="Times New Roman"),
+      override.aes = list(color = NA))) +  
+  theme_classic() +
+  theme(#plot.background = element_rect(fill = "aliceblue"),
+        panel.grid = element_blank(),
+        panel.background = element_rect(fill = "lightblue"),
+        legend.position = c(0.06, 0.31),
+        legend.background = element_rect(fill = "lightblue"))+
+   annotation_north_arrow( 
+    location="tl",
+    style = north_arrow_orienteering(
+      text_size = 5,text_family = "Times New Roman Bold"
+    ),
+     height = unit(0.6, "cm"),
+  width = unit(0.48, "cm"),
+  pad_y = unit(0.000000001,"cm")
+  )
+```
+
+```{r merger}
+library(patchwork)
+
+ figure2/figure3/figure1+ plot_layout(ncol=1)+
+  plot_annotation(tag_levels = list(c("A: Global spatial and temporal distribution of the cumulative SARS incidence, 2002-2003","B: Global spatial and temporal distribution of the cumulative MERS incidence, 2012-2019","C: Global spatial and temporal distribution of the cumulative COVID-19 incidence, 2019-2024"))) & theme(plot.tag=element_text(size = 11,family="Times New Roman Bold",hjust = 0),
+      plot.tag.position = c(0, 1.023),
+      plot.tag.location = "plot")
+
+```
